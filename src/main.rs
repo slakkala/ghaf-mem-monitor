@@ -26,6 +26,7 @@ struct Args {
     interval: u64,
 
     /// Minimum ballooning interval
+    #[arg(short, long, default_value_t = 3)]
     balloon_interval: u64,
 
     /// Low memory presure
@@ -122,7 +123,7 @@ impl QmpConnection {
                 .await
                 .context("Failed to connect to QMP socket")?,
         );
-        info!("Conenceted to {}", self.path.display());
+        info!("Connected to {}", self.path.display());
         let mut buf = vec![];
         stream.read_until(b'\n', &mut buf).await?;
         buf.clear();
@@ -306,7 +307,7 @@ async fn monitor_memory(args: Args) -> Result<()> {
                     continue;
                 }
             };
-            if let Err(e) = tokio::select! {
+            tokio::select! {
                 e = async {
                     qmp.set_stats_interval(dur).await?;
                     let balloon = qmp.query_balloon().await?;
@@ -354,9 +355,7 @@ async fn monitor_memory(args: Args) -> Result<()> {
                         info!("Got event: {e:?}");
                     }
                 } => Ok(()),
-            } {
-                warn!("Monitoring {} failed: {e}", qmp.path.display());
-            }
+            }?;
         }
     }
 }

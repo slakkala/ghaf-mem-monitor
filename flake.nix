@@ -43,7 +43,7 @@
 
         # Build the actual crate itself, reusing the dependency
         # artifacts from above.
-        my-crate = craneLib.buildPackage (commonArgs // {
+        ghaf-mem-monitor = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
           postUnpack = ''
             find .
@@ -53,15 +53,15 @@
       {
         checks = {
           # Build the crate as part of `nix flake check` for convenience
-          inherit my-crate;
+          inherit ghaf-mem-monitor;
         };
 
         packages = {
-          default = my-crate;
+          default = ghaf-mem-monitor;
         };
 
         apps.default = flake-utils.lib.mkApp {
-          drv = my-crate;
+          drv = ghaf-mem-monitor;
         };
 
         devShells.default = craneLib.devShell {
