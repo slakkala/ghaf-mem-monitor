@@ -29,6 +29,14 @@ struct Args {
     #[arg(short, long, default_value_t = 3)]
     balloon_interval: u64,
 
+    /// Minimum memory size
+    #[arg(short, long, default_value_t = usize::MIN)]
+    minimum: usize,
+
+    /// Maximum memory size
+    #[arg(short = 'M', long, default_value_t = usize::MAX)]
+    maximum: usize,
+
     /// Low memory presure
     #[arg(short, long, default_value_t = 70)]
     low: u8,
@@ -325,24 +333,29 @@ async fn monitor_memory(args: Args) -> Result<()> {
                             available_memory: guest_stats.stats.stat_available_memory,
                         };
 
-                        info!("{stats}");
-
                         let pressure = stats.pressure();
-                        if pressure < args.low {
+                        if let Some(target) = if pressure < args.low {
                             if qmp.last_balloon.borrow().elapsed().as_secs() > args.balloon_interval {
-                                let target = stats.reserved() * 100 / args.low as usize;
-                                info!("Pressure below limit, inflating balloon; adjusting size to {target}");
-                                qmp.balloon(target).await?;
+                                info!("Pressure below limit, inflating balloon");
+                                Some(stats.reserved() * 100 / args.low as usize)
                             } else {
                                 info!("Pressure below limit, waiting for stabilisation");
+                                None
                             }
                         } else if pressure > args.high {
                             if qmp.last_balloon.borrow().elapsed().as_secs() > args.balloon_interval {
-                                let target = stats.total_memory.min(stats.reserved() * 100 / (args.high as usize - 2));
-                                info!("Pressure above limit, deflating balloon; adjusting size to {target}");
-                                qmp.balloon(target).await?;
+                                info!("Pressure above limit, deflating balloon");
+                                Some(stats.total_memory.min(stats.reserved() * 100 / (args.high as usize - 2)))
                             } else {
                                 info!("Pressure above limit, waiting for stabilisation");
+                                None
+                            }
+                        } else {
+                            None
+                        } {
+                            let target = target.clamp(args.minimum, args.maximum);
+                            if target != stats.balloon_size {
+                                qmp.balloon(target).await?;
                             }
                         }
                     }
